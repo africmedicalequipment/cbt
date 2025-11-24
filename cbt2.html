@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CBT WebApp</title>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f2f5f7;
+        margin: 0;
+        padding: 0;
+    }
+
+    .container {
+        width: 95%;
+        max-width: 650px;
+        margin: auto;
+        margin-top: 15px;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 0 10px #cfd6dd;
+    }
+
+    h2, h3 {
+        text-align: center;
+        color: #003366;
+    }
+
+    select, input {
+        width: 100%;
+        padding: 12px;
+        margin-bottom: 12px;
+        border: 1px solid #bbb;
+        border-radius: 5px;
+    }
+
+    button {
+        width: 100%;
+        padding: 14px;
+        background: #003366;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        font-size: 17px;
+    }
+
+    button:hover {
+        background: #002244;
+    }
+
+    .question-box {
+        margin-top: 20px;
+    }
+
+    .option {
+        padding: 12px;
+        background: #e6ecf2;
+        margin-bottom: 10px;
+        border-radius: 5px;
+    }
+
+    .correct {
+        background: #c8f7c5 !important;
+    }
+
+    .wrong {
+        background: #f7c5c5 !important;
+    }
+
+    .nav-btns {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 20px;
+    }
+
+    .small-btn {
+        width: 48%;
+        padding: 12px;
+    }
+
+    .hidden {
+        display: none;
+    }
+</style>
+
+</head>
+<body>
+
+<div class="container" id="start-screen">
+    <h2>Online CBT Practice</h2>
+
+    <label>Exam Type</label>
+    <select id="examSelect"></select>
+
+    <label>Subject</label>
+    <select id="subjectSelect"></select>
+
+    <label>Year</label>
+    <select id="yearSelect"></select>
+
+    <label>No. of Questions</label>
+    <input type="number" id="questionCount" placeholder="Enter number">
+
+    <label>Duration (minutes)</label>
+    <input type="number" id="duration" placeholder="E.g 20">
+
+    <button onclick="startExam()">Start Exam</button>
+</div>
+
+
+<div class="container hidden" id="exam-screen">
+    <h3 id="timer"></h3>
+    <div class="question-box">
+        <h3 id="questionText"></h3>
+        <div id="options"></div>
+    </div>
+
+    <div class="nav-btns">
+        <button class="small-btn" onclick="prevQuestion()">Back</button>
+        <button class="small-btn" onclick="nextQuestion()">Next</button>
+    </div>
+
+    <button style="margin-top:20px;background:#cc0000" onclick="submitExam()">Submit Exam</button>
+</div>
+
+
+<div class="container hidden" id="result-screen">
+    <h2>Result Summary</h2>
+
+    <h3 id="scoreText"></h3>
+    <div id="summary"></div>
+</div>
+
+
+<script>
+const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSDcBKJMee5gQ3J7gWwn04wzYVMrZFMzthqABaNGoglWdG-xrkdl0b4pSdnnZvJ-rOU_wvxTLUk6cEa/pubhtml";
+
+let allQuestions = [];
+let examQuestions = [];
+let currentIndex = 0;
+let userAnswers = {};
+let timerInterval;
+
+// Fetch Google Sheet CSV
+fetch(sheetURL)
+    .then(res => res.text())
+    .then(data => {
+        const rows = data.split("\n").map(r => r.split(","));
+
+        const headers = rows.shift();
+
+        allQuestions = rows.map(row => {
+            let obj = {};
+            headers.forEach((h, i) => obj[h.trim()] = row[i]);
+            return obj;
+        });
+
+        loadFilters();
+    });
+
+// Load dropdowns
+function loadFilters() {
+    const examTypes = [...new Set(allQuestions.map(q => q.exam_type))];
+    const subjects = [...new Set(allQuestions.map(q => q.subject))];
+    const years = [...new Set(allQuestions.map(q => q.year))];
+
+    examTypes.forEach(v => examSelect.innerHTML += `<option>${v}</option>`);
+    subjects.forEach(v => subjectSelect.innerHTML += `<option>${v}</option>`);
+    years.forEach(v => yearSelect.innerHTML += `<option>${v}</option>`);
+}
+
+// Start Exam
+function startExam() {
+    const exam = examSelect.value;
+    const subject = subjectSelect.value;
+    const year = yearSelect.value;
+    const count = Number(questionCount.value);
+    const durationMin = Number(duration.value);
+
+    if (!count || !durationMin) {
+        alert("Enter number of questions and duration");
+        return;
+    }
+
+    const filtered = allQuestions.filter(q =>
+        q.exam_type === exam &&
+        q.subject === subject &&
+        q.year === year
+    );
+
+    examQuestions = shuffled(filtered).slice(0, count);
+    currentIndex = 0;
+    userAnswers = {};
+
+    startTimer(durationMin * 60);
+
+    document.getElementById("start-screen").classList.add("hidden");
+    document.getElementById("exam-screen").classList.remove("hidden");
+
+    loadQuestion();
+}
+
+// Timer
+function startTimer(seconds) {
+    timerInterval = setInterval(() => {
+        let m = Math.floor(seconds / 60);
+        let s = seconds % 60;
+
+        timer.textContent = `Time Left: ${m}:${s < 10 ? "0" + s : s}`;
+
+        if (seconds <= 0) {
+            clearInterval(timerInterval);
+            submitExam();
+        }
+        seconds--;
+    }, 1000);
+}
+
+// Shuffle function
+function shuffled(arr) {
+    return arr.sort(() => Math.random() - 0.5);
+}
+
+// Render question
+function loadQuestion() {
+    let q = examQuestions[currentIndex];
+    questionText.textContent = (currentIndex + 1) + ". " + q.question;
+
+    options.innerHTML = "";
+    ["option_a","option_b","option_c","option_d"].forEach(opt => {
+        options.innerHTML += `
+            <div class="option">
+                <input type="radio" name="option" value="${opt}" 
+                    ${userAnswers[currentIndex] === opt ? "checked" : ""}>
+                ${q[opt]}
+            </div>
+        `;
+    });
+}
+
+// Navigation
+function nextQuestion() {
+    saveAnswer();
+    if (currentIndex < examQuestions.length - 1) {
+        currentIndex++;
+        loadQuestion();
+    }
+}
+
+function prevQuestion() {
+    saveAnswer();
+    if (currentIndex > 0) {
+        currentIndex--;
+        loadQuestion();
+    }
+}
+
+// Save selected option
+function saveAnswer() {
+    let sel = document.querySelector("input[name='option']:checked");
+    if (sel) userAnswers[currentIndex] = sel.value;
+}
+
+// Submit Exam
+function submitExam() {
+    clearInterval(timerInterval);
+
+    let score = 0;
+    let summaryHTML = "";
+
+    examQuestions.forEach((q, i) => {
+        let userAns = userAnswers[i];
+        let correct = q.correct_answer.trim();
+
+        let isCorrect = userAns === correct;
+        if (isCorrect) score++;
+
+        summaryHTML += `
+            <div style="margin-bottom:15px;padding:12px;border-radius:5px;background:#eef2f5">
+                <b>Q${i+1}.</b> ${q.question}<br>
+                Your Answer: 
+                <span style="color:${isCorrect?'green':'red'}">
+                    ${userAns ? q[userAns] : "Not answered"}
+                </span><br>
+                Correct Answer: <b style="color:green">${q[correct]}</b>
+            </div>
+        `;
+    });
+
+    scoreText.innerHTML = `Score: ${score} / ${examQuestions.length}`;
+    summary.innerHTML = summaryHTML;
+
+    document.getElementById("exam-screen").classList.add("hidden");
+    document.getElementById("result-screen").classList.remove("hidden");
+}
+</script>
+
+</body>
+</html>
