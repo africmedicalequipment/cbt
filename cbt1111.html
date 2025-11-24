@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mobile CBT — One Page</title>
+<style>
+  /* Mobile-first JAMB/WAEC-style theme: clean, white card, green accents */
+  :root{
+    --accent:#0b6b3a; /* deep green */
+    --accent-2:#2a8f57;
+    --muted:#666;
+    --card-radius:12px;
+    --max-width:720px;
+  }
+  html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+  body{background:linear-gradient(#f6fbf6, #ffffff); display:flex; align-items:center; justify-content:center; padding:20px;}
+  .app{width:100%; max-width:var(--max-width); box-shadow:0 6px 24px rgba(10,10,10,0.08); border-radius:16px; overflow:hidden; background:#fff;}
+  header{padding:18px 16px; background:linear-gradient(90deg,var(--accent),var(--accent-2)); color:#fff;}
+  header h1{margin:0;font-size:18px; font-weight:700;}
+  header p{margin:6px 0 0;font-size:13px; opacity:0.95;}
+  .container{padding:16px;}
+  .field{margin-bottom:14px;}
+  label{display:block;font-size:13px;color:var(--muted); margin-bottom:6px;}
+  select,input[type=number],input[type=text]{width:100%; padding:12px;border-radius:8px;border:1px solid #e6e6e6;font-size:15px; box-sizing:border-box;}
+  .row{display:flex; gap:12px;}
+  .row .field{flex:1;}
+  button.primary{background:var(--accent); color:#fff; border:none; padding:12px 14px; border-radius:10px; font-weight:700; width:100%;}
+  button.ghost{background:transparent; border:1px solid #ddd; padding:10px 12px; border-radius:8px;}
+  .meta{display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px;}
+  .card{background:#fff;border-radius:12px;padding:12px;border:1px solid #f0f0f0; margin-bottom:12px;}
+  .question{font-weight:700;font-size:16px;margin-bottom:10px;}
+  .options{display:grid; gap:8px;}
+  .option{display:flex; align-items:flex-start; gap:10px; padding:10px; border-radius:10px; border:1px solid #eee; cursor:pointer; background:#fafafa;}
+  .option input{margin-top:3px;}
+  .controls{display:flex; gap:10px; margin-top:12px;}
+  .controls button{flex:1;}
+  .timer{font-weight:700; color:var(--accent);}
+  .small{font-size:13px;color:var(--muted);}
+  .result{padding:16px;}
+  .wrong{border-left:4px solid #e94b3c; padding:10px; margin-bottom:8px; border-radius:8px; background:#fff6f6;}
+  .correct{border-left:4px solid #2aa85a; padding:10px; margin-bottom:8px; border-radius:8px; background:#f6fff6;}
+  .highlight{font-weight:700; color:var(--accent);}
+  footer{padding:12px 16px;background:#fafafa; display:flex; gap:8px;}
+  @media (min-width:720px){
+    body{padding:32px;}
+  }
+  .muted-line{font-size:13px;color:#888;margin-bottom:12px;}
+</style>
+</head>
+<body>
+  <div class="app" role="application" aria-labelledby="app-title">
+    <header>
+      <h1 id="app-title">Mobile CBT — One-page</h1>
+      <p>One question per screen • Random selection • Timer • No backend</p>
+    </header>
+
+    <div class="container" id="app">
+      <!-- START: Setup screen -->
+      <div id="setup-screen">
+        <div class="card">
+          <div class="field">
+            <label for="sheetUrl">Google Sheet (published) — using provided link</label>
+            <input id="sheetUrl" type="text" readonly value="https://docs.google.com/spreadsheets/d/e/2PACX-1vSDcBKJMee5gQ3J7gWwn04wzYVMrZFMzthqABaNGoglWdG-xrkdl0b4pSdnnZvJ-rOU_wvxTLUk6cEa/pubhtml" />
+            <div class="small">If you update sheet, re-publish to web. The app fetches CSV derived from this URL.</div>
+          </div>
+
+          <div class="field">
+            <label for="examType">Exam Type</label>
+            <select id="examType"><option value="">Loading...</option></select>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label for="subject">Subject</label>
+              <select id="subject"><option value="">Loading...</option></select>
+            </div>
+            <div class="field">
+              <label for="year">Year</label>
+              <select id="year"><option value="">Loading...</option></select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label for="noQuestions">Number of questions</label>
+              <input id="noQuestions" type="number" min="1" placeholder="e.g. 20" value="20" />
+            </div>
+            <div class="field">
+              <label for="duration">Duration (minutes)</label>
+              <input id="duration" type="number" min="1" placeholder="e.g. 30" value="30" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="candidateName">Candidate name (optional)</label>
+            <input id="candidateName" type="text" placeholder="e.g. Jane Doe" />
+          </div>
+
+          <div style="display:flex; gap:10px; margin-top:8px;">
+            <button id="startBtn" class="primary">Start Exam</button>
+            <button id="reloadBtn" class="ghost">Reload Questions</button>
+          </div>
+        </div>
+        <div class="small muted-line">Tip: Use the filters above (exam type, subject, year). Question pool is taken from your sheet and randomised for the selected count.</div>
+      </div>
+      <!-- END Setup screen -->
+
+      <!-- START: Question screen -->
+      <div id="question-screen" style="display:none;">
+        <div class="meta">
+          <div class="small">Q <span id="qIndex">1</span> of <span id="qTotal">10</span></div>
+          <div class="timer" id="timer">00:00</div>
+        </div>
+
+        <div class="card">
+          <div class="question" id="questionText">Question text</div>
+          <div class="options" id="optionsContainer"></div>
+          <div class="small" id="explainHint" style="display:none;margin-top:8px;">(Use Back to change answers.)</div>
+          <div class="controls">
+            <button id="backBtn" class="ghost">Back</button>
+            <button id="nextBtn" class="primary" disabled>Next</button>
+          </div>
+        </div>
+      </div>
+      <!-- END Question screen -->
+
+      <!-- START: Result screen -->
+      <div id="result-screen" style="display:none;">
+        <div class="card result" id="resultCard">
+          <h2 id="scoreTitle">You scored 0 / 0</h2>
+          <div class="small" id="scorePercent">0%</div>
+          <div style="margin-top:12px;">
+            <button id="retryBtn" class="primary">Take another test</button>
+            <button id="viewAnswersBtn" class="ghost">View answers</button>
+          </div>
+        </div>
+
+        <div id="answersList" style="display:none; padding:0 16px 16px;">
+          <h3 class="small" style="margin-bottom:8px;">Wrong questions and correct answers</h3>
+          <div id="wrongContainer"></div>
+        </div>
+      </div>
+      <!-- END Result screen -->
+
+    </div>
+
+    <footer>
+      <div class="small">Built for mobile • JAMB/WAEC style • No backend</div>
+    </footer>
+  </div>
+
+<script>
+/* Mobile CBT app - client-side only. Fetches CSV from published Google Sheet.
+   How it works:
+   - Uses the provided "pubhtml" link and converts to CSV endpoint (pub?output=csv)
+   - Parses CSV robustly (handles quoted fields)
+   - Populates exam filters from sheet
+   - On Start: filters pool, randomizes, slices requested number, runs timed exam
+*/
+
+(function(){
+  // --- CONFIG: use the sheet URL from the input (pre-filled)
+  const sheetInput = document.getElementById('sheetUrl');
+  function csvUrlFromPubHtml(pubHtmlUrl){
+    // If it already contains "output=csv", return as-is
+    if(pubHtmlUrl.includes('output=csv')) return pubHtmlUrl;
+    // Replace /pubhtml or /pub?widget with /pub?output=csv
+    if(pubHtmlUrl.endsWith('/pubhtml')) return pubHtmlUrl.replace('/pubhtml','/pub?output=csv');
+    // fallback: append query
+    return pubHtmlUrl + (pubHtmlUrl.includes('?') ? '&output=csv' : '?output=csv');
+  }
+
+  // --- DOM refs
+  const examTypeEl = document.getElementById('examType');
+  const subjectEl = document.getElementById('subject');
+  const yearEl = document.getElementById('year');
+  const noQuestionsEl = document.getElementById('noQuestions');
+  const durationEl = document.getElementById('duration');
+  const startBtn = document.getElementById('startBtn');
+  const reloadBtn = document.getElementById('reloadBtn');
+  const setupScreen = document.getElementById('setup-screen');
+  const questionScreen = document.getElementById('question-screen');
+  const resultScreen = document.getElementById('result-screen');
+  const qIndexEl = document.getElementById('qIndex');
+  const qTotalEl = document.getElementById('qTotal');
+  const timerEl = document.getElementById('timer');
+  const questionTextEl = document.getElementById('questionText');
+  const optionsContainer = document.getElementById('optionsContainer');
+  const backBtn = document.getElementById('backBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const scoreTitle = document.getElementById('scoreTitle');
+  const scorePercent = document.getElementById('scorePercent');
+  const retryBtn = document.getElementById('retryBtn');
+  const viewAnswersBtn = document.getElementById('viewAnswersBtn');
+  const wrongContainer = document.getElementById('wrongContainer');
+  const answersList = document.getElementById('answersList');
+  const candidateNameEl = document.getElementById('candidateName');
+
+  // State
+  let rawQuestions = []; // all questions from sheet
+  let pool = [];         // filtered questions pool
+  let examQuestions = []; // selected exam questions
+  let answers = [];      // user answers e.g. 'A'|'B'|null
+  let currentIndex = 0;
+  let timerInterval = null;
+  let timeRemaining = 0; // seconds
+
+  // === CSV parsing helper (robust)
+  function parseCSV(text){
+    // Returns array of rows where each row is array of columns
+    const rows = [];
+    let cur = '', row = [], i=0, inQuotes=false;
+    while(i < text.length){
+      const ch = text[i];
+      if(inQuotes){
+        if(ch === '"'){
+          if(text[i+1] === '"'){ cur += '"'; i += 2; continue; } // escaped quote
+          inQuotes = false; i++; continue;
+        } else { cur += ch; i++; continue; }
+      } else {
+        if(ch === '"'){ inQuotes = true; i++; continue; }
+        if(ch === ','){ row.push(cur); cur = ''; i++; continue; }
+        if(ch === '\\r'){ i++; continue; }
+        if(ch === '\\n' || ch === '\n'){ row.push(cur); cur = ''; rows.push(row); row = []; i++; continue; }
+        cur += ch; i++;
+      }
+    }
+    // push last cell/row
+    if(cur !== '' || row.length > 0){ row.push(cur); rows.push(row); }
+    return rows;
+  }
+
+  // --- Convert parsed rows into objects by header
+  function rowsToObjects(rows){
+    if(!rows || rows.length ===0) return [];
+    const header = rows[0].map(h => String(h || '').trim());
+    const out = [];
+    for(let r=1;r<rows.length;r++){
+      const row = rows[r];
+      // skip empty rows (all empty)
+      if(row.every(c => (c||'').trim() === '')) continue;
+      const obj = {};
+      for(let c=0;c<header.length;c++){
+        obj[header[c]] = (row[c] || '').trim();
+      }
+      out.push(obj);
+    }
+    return out;
+  }
+
+  // --- Fetch sheet CSV
+  async function fetchSheetData(){
+    const pub = sheetInput.value.trim();
+    const csvUrl = csvUrlFromPubHtml(pub);
+    try{
+      // show loading in selects
+      examTypeEl.innerHTML = '<option>Loading...</option>';
+      subjectEl.innerHTML = '<option>Loading...</option>';
+      yearEl.innerHTML = '<option>Loading...</option>';
+      const res = await fetch(csvUrl);
+      if(!res.ok) throw new Error('Failed to fetch sheet. Make sure it is published to web and publicly accessible.');
+      const text = await res.text();
+      const rows = parseCSV(text);
+      const objs = rowsToObjects(rows);
+      return objs;
+    } catch(err){
+      alert('Error fetching sheet: ' + err.message);
+      console.error(err);
+      return [];
+    }
+  }
+
+  // --- Populate filter dropdowns
+  function populateFilters(data){
+    rawQuestions = data;
+    // normalize keys: ensure exact expected headers exist
+    // Expected: exam_type,subject,year,question,option_a,option_b,option_c,option_d,correct_answer
+    const missing = ['exam_type','subject','year','question','option_a','option_b','option_c','option_d','correct_answer']
+      .filter(k => !(rawQuestions[0] && Object.prototype.hasOwnProperty.call(rawQuestions[0], k)));
+    // we won't block, but warn in console if headers mismatch
+    if(rawQuestions.length === 0){
+      examTypeEl.innerHTML = '<option value="">No questions found</option>';
+      subjectEl.innerHTML = '<option value="">—</option>';
+      yearEl.innerHTML = '<option value="">—</option>';
+      return;
+    }
+    // Build unique lists
+    const types = new Set(), subjects = new Set(), years = new Set();
+    rawQuestions.forEach(q=>{
+      if(q.exam_type) types.add(q.exam_type);
+      if(q.subject) subjects.add(q.subject);
+      if(q.year) years.add(q.year);
+    });
+    // fill selects with "All" option for convenience
+    const makeOptions = (set) => {
+      const arr = Array.from(set).filter(x=>x && x.trim()!=='').sort();
+      return ['<option value="">— choose —</option>'].concat(arr.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`)).join('');
+    };
+    examTypeEl.innerHTML = makeOptions(types);
+    subjectEl.innerHTML = makeOptions(subjects);
+    yearEl.innerHTML = makeOptions(years);
+  }
+
+  // --- Utility: escape html
+  function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // --- Utility: randomize array (Fisher-Yates)
+  function shuffle(arr){
+    const a = arr.slice();
+    for(let i=a.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [a[i],a[j]] = [a[j],a[i]];
+    }
+    return a;
+  }
+
+  // --- Start exam
+  function startExam(){
+    // Filter pool based on selected exam_type/subject/year
+    const examType = examTypeEl.value;
+    const subject = subjectEl.value;
+    const year = yearEl.value;
+    const noQ = Math.max(1, parseInt(noQuestionsEl.value || '10',10));
+    const minutes = Math.max(1, parseInt(durationEl.value || '10',10));
+
+    pool = rawQuestions.filter(q=>{
+      if(examType && String(q.exam_type||'') !== examType) return false;
+      if(subject && String(q.subject||'') !== subject) return false;
+      if(year && String(q.year||'') !== year) return false;
+      // ensure required fields exist
+      if(!(q.question && q.option_a && q.option_b && q.option_c && q.option_d && q.correct_answer)) return false;
+      return true;
+    });
+
+    if(pool.length === 0){
+      alert('No questions match your filters. Try selecting different filters or ensure your sheet rows are populated.');
+      return;
+    }
+
+    // randomize and slice
+    examQuestions = shuffle(pool).slice(0, Math.min(noQ, pool.length)).map(q => ({
+      question: q.question,
+      options: {A:q.option_a, B:q.option_b, C:q.option_c, D:q.option_d},
+      correct: (String(q.correct_answer||'').trim().toUpperCase() || null),
+      meta: {exam_type: q.exam_type, subject: q.subject, year: q.year}
+    }));
+
+    answers = new Array(examQuestions.length).fill(null);
+    currentIndex = 0;
+
+    // Start timer
+    timeRemaining = minutes * 60;
+    startTimer();
+
+    // Show question screen
+    setupScreen.style.display = 'none';
+    questionScreen.style.display = '';
+    resultScreen.style.display = 'none';
+    renderQuestion();
+  }
+
+  // --- Timer
+  function startTimer(){
+    if(timerInterval) clearInterval(timerInterval);
+    updateTimerDisplay();
+    timerInterval = setInterval(()=>{
+      timeRemaining--;
+      updateTimerDisplay();
+      if(timeRemaining <= 0){
+        clearInterval(timerInterval); timerInterval = null;
+        alert('Time is up. Your answers will be submitted now.');
+        submitExam();
+      }
+    }, 1000);
+  }
+  function updateTimerDisplay(){
+    const mm = String(Math.floor(timeRemaining/60)).padStart(2,'0');
+    const ss = String(timeRemaining%60).padStart(2,'0');
+    timerEl.textContent = mm + ':' + ss;
+  }
+
+  // --- Render a question
+  function renderQuestion(){
+    const q = examQuestions[currentIndex];
+    qIndexEl.textContent = (currentIndex + 1);
+    qTotalEl.textContent = examQuestions.length;
+    questionTextEl.innerHTML = escapeHtml(q.question);
+    optionsContainer.innerHTML = '';
+    // Build options
+    ['A','B','C','D'].forEach(letter=>{
+      const txt = q.options[letter] || '';
+      const option = document.createElement('label');
+      option.className = 'option';
+      option.tabIndex = 0;
+      option.innerHTML = `
+        <input type="radio" name="opt" value="${letter}" ${answers[currentIndex]===letter ? 'checked' : ''} />
+        <div style="flex:1;">
+          <div style="font-weight:700">${letter}.</div>
+          <div style="margin-top:4px;">${escapeHtml(txt)}</div>
+        </div>
+      `;
+      option.addEventListener('click', e=>{
+        const input = option.querySelector('input');
+        input.checked = true;
+        // update answer
+        answers[currentIndex] = input.value;
+        nextBtn.disabled = false;
+      });
+      // keyboard friendly
+      option.addEventListener('keypress', e=>{
+        if(e.key === 'Enter' || e.key === ' ') { option.click(); e.preventDefault(); }
+      });
+      optionsContainer.appendChild(option);
+    });
+    // Next/Back button states
+    backBtn.disabled = (currentIndex === 0);
+    nextBtn.textContent = (currentIndex === examQuestions.length - 1 ? 'Submit' : 'Next');
+    nextBtn.disabled = (answers[currentIndex] === null);
+  }
+
+  // --- Next / Back actions
+  function onNext(){
+    // if last question -> submit
+    if(currentIndex === examQuestions.length - 1){
+      // confirm?
+      if(!confirm('Submit exam now?')) return;
+      submitExam();
+      return;
+    }
+    // proceed
+    currentIndex++;
+    renderQuestion();
+  }
+  function onBack(){
+    if(currentIndex === 0) return;
+    currentIndex--;
+    renderQuestion();
+  }
+
+  // --- Calculate results
+  function submitExam(){
+    // stop timer
+    if(timerInterval) clearInterval(timerInterval);
+    timerInterval = null;
+    // compute score
+    let correctCount = 0;
+    const wrongs = [];
+    for(let i=0;i<examQuestions.length;i++){
+      const user = (answers[i] || '').toUpperCase();
+      const correct = (examQuestions[i].correct || '').toUpperCase();
+      if(user === correct && user !== '') correctCount++;
+      else {
+        wrongs.push({
+          index: i,
+          question: examQuestions[i].question,
+          options: examQuestions[i].options,
+          correct: correct,
+          selected: user || null,
+          meta: examQuestions[i].meta
+        });
+      }
+    }
+    // show result screen
+    scoreTitle.textContent = `You scored ${correctCount} / ${examQuestions.length}`;
+    const percent = Math.round((correctCount / examQuestions.length) * 100);
+    scorePercent.textContent = `${percent}%`;
+    // populate wrong list
+    wrongContainer.innerHTML = '';
+    if(wrongs.length === 0){
+      wrongContainer.innerHTML = '<div class="correct">Perfect score! No wrong answers.</div>';
+    } else {
+      wrongs.forEach(w=>{
+        const d = document.createElement('div');
+        d.className = 'wrong';
+        // show question, user's answer (if any), and correct answer highlighted
+        const userText = w.selected ? `Your answer: ${w.selected} — ${escapeHtml(w.options[w.selected]||'')}` : 'Your answer: (no answer)';
+        const correctText = `Correct: ${w.correct} — ${escapeHtml(w.options[w.correct]||'')}`;
+        d.innerHTML = `<div style="font-weight:700;">${escapeHtml(w.question)}</div>
+                       <div style="margin-top:8px;" class="small">${escapeHtml(userText)}</div>
+                       <div style="margin-top:6px;" class="small highlight">${escapeHtml(correctText)}</div>`;
+        wrongContainer.appendChild(d);
+      });
+    }
+
+    // show screens
+    setupScreen.style.display = 'none';
+    questionScreen.style.display = 'none';
+    resultScreen.style.display = '';
+    answersList.style.display = wrongs.length ? '' : '';
+  }
+
+  // --- UI events
+  startBtn.addEventListener('click', ()=> startExam());
+  reloadBtn.addEventListener('click', initLoadQuestions);
+  nextBtn.addEventListener('click', onNext);
+  backBtn.addEventListener('click', onBack);
+  retryBtn.addEventListener('click', ()=>{
+    // back to setup
+    resultScreen.style.display = 'none';
+    setupScreen.style.display = '';
+  });
+  viewAnswersBtn.addEventListener('click', ()=>{
+    // Show wrong list area toggle
+    answersList.style.display = answersList.style.display === 'none' ? '' : 'none';
+  });
+
+  // --- Initial load
+  async function initLoadQuestions(){
+    const data = await fetchSheetData();
+    populateFilters(data);
+  }
+
+  // populate on load
+  initLoadQuestions();
+
+  // Accessibility: disable selection of next until radio checked
+  optionsContainer.addEventListener('change', e=>{
+    nextBtn.disabled = false;
+  });
+
+  // allow pressing Enter on start
+  document.addEventListener('keydown', e=>{
+    if(e.key === 'Enter' && setupScreen.style.display !== 'none' && document.activeElement && document.activeElement.tagName !== 'INPUT'){
+      startExam();
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
